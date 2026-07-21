@@ -1,151 +1,47 @@
 import streamlit as st
-import pandas as pd
-import math
-from pathlib import Path
 
-# Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+    page_title='데이터 시각화 앱',
+    page_icon='📊',
+    layout='wide'
 )
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+# 데이터 설명
+st.title('📊 데이터 시각화 앱')
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+st.header('📌 데이터 설명')
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+st.markdown("""
+이 데이터는 **서울시 공공자전거의 시간대별 대여 현황**을 기록한 자료입니다.
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+**수집 기간:** 2017년 12월 1일부터 2018년 11월 30일까지  
+**데이터 규모:** 총 8,760개의 데이터
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+### 📋 포함된 정보
+- 날짜와 시간
+- 자전거 대여 건수
+- 기온, 습도, 풍속, 가시거리
+- 강수량과 적설량
+- 계절과 공휴일 여부
+- 자전거 대여소 운영 여부
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
+### 💡 활용 방안
+이 데이터를 활용하면:
+- 시간대, 계절, 날씨에 따라 자전거 이용량이 어떻게 달라지는지 살펴볼 수 있습니다
+- 자전거 대여량을 예측할 수 있습니다
+- 계절별/시간대별 이용 패턴을 분석할 수 있습니다
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+---
+""")
 
-    return gdp_df
+st.header('🚀 시작하기')
 
-gdp_df = get_gdp_data()
+st.markdown("""
+왼쪽 사이드바의 **📈 데이터 시각화** 페이지에서:
+1. CSV 파일을 업로드합니다
+2. 변수별 기술통계 시각화를 확인합니다
+3. **일변수 분석**: 단일 변수의 분포도(히스토그램) 또는 박스플롯을 볼 수 있습니다
+4. **이변수 분석**: 두 변수 간의 관계를 산점도로 확인할 수 있습니다
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
-
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
-
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
-
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+Plotly를 활용한 다양한 시각화로 데이터를 분석해보세요!
+""")
